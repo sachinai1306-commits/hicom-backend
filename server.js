@@ -1242,6 +1242,16 @@ app.post("/api/auth/verify-otp", (req, res) => {
   }
 });
 
+// App In-App Update Version Check
+app.get("/api/app-version", (req, res) => {
+  res.json({
+    latestVersion: process.env.APP_LATEST_VERSION || "1.0.0",
+    minRequiredVersion: process.env.APP_MIN_VERSION || "1.0.0",
+    downloadUrl: process.env.APP_DOWNLOAD_URL || "https://expo.dev/artifacts/eas/mOMfAQ1kyPqW8Yqizrn-K1G0GcV32bXZdf-b0hsIt80.apk",
+    releaseNotes: process.env.APP_RELEASE_NOTES || "Performance improvements & new features available.",
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`HICOM Backend running at http://localhost:${PORT}`);
 });
@@ -1486,6 +1496,7 @@ app.post("/api/vendors/:id/ratings", requireEmployee, (req, res) => {
     rating: newRating
   });
 });
+
 
 
 
