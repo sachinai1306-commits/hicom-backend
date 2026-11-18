@@ -1151,11 +1151,7 @@ app.post("/api/auth/send-otp", async (req, res) => {
       return res.status(500).json({ error: "OTP_TEST_EMAIL not configured" });
     }
 
-    if (email !== testEmail) {
-      return res.status(403).json({
-        error: "Resend test mode: only the verified test email is allowed"
-      });
-    }
+    const recipientEmail = email === testEmail ? email : testEmail;
 
     const existing = emailOtps.get(email);
 
@@ -1168,8 +1164,8 @@ app.post("/api/auth/send-otp", async (req, res) => {
 
     const result = await resend.emails.send({
       from: "HICOM Vendor Finder <onboarding@resend.dev>",
-      to: [email],
-      subject: "HICOM Vendor Finder - Login OTP",
+      to: [recipientEmail],
+      subject: `HICOM Vendor Finder - Login OTP (${email})`,
       html: `<h2>Your login OTP is ${otp}</h2><p>This OTP expires in 5 minutes. Do not share it.</p>`
     });
 
@@ -1491,6 +1487,7 @@ app.post("/api/vendors/:id/ratings", requireEmployee, (req, res) => {
     rating: newRating
   });
 });
+
 
 
 
