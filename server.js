@@ -3,11 +3,17 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { Resend } = require("resend");
+const nodemailer = require("nodemailer");
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const app = express();
-const resend = new Resend(process.env.RESEND_API_KEY);
+const mailTransporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 const PORT = 3001;
 const DATA_FILE = path.join(__dirname, "vendors.json");
 
@@ -916,17 +922,12 @@ app.post("/api/admin/forgot-password", async (req, res) => {
     const otp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
 
-    const result = await resend.emails.send({
-      from: "HICOM Vendor Finder <onboarding@resend.dev>",
-      to: [adminEmail],
+    await mailTransporter.sendMail({
+      from: `"HICOM Vendor Finder" <${process.env.GMAIL_USER}>`,
+      to: adminEmail,
       subject: "HICOM Admin Password Reset OTP",
       html: `<h2>Admin Password Reset OTP: ${otp}</h2><p>This OTP is valid for 5 minutes. If you did not request a reset, ignore this email.</p>`
     });
-
-    if (result.error) {
-      console.error("Resend admin OTP error:", result.error);
-      return res.status(502).json({ success: false, message: "Could not send reset OTP email." });
-    }
 
     adminResetOtps.set(adminEmail, {
       hash: otpHash,
@@ -1145,14 +1146,6 @@ app.post("/api/auth/send-otp", async (req, res) => {
       return res.status(400).json({ error: "Valid email required" });
     }
 
-    const testEmail = String(process.env.OTP_TEST_EMAIL || "").trim().toLowerCase();
-
-    if (!testEmail) {
-      return res.status(500).json({ error: "OTP_TEST_EMAIL not configured" });
-    }
-
-    const recipientEmail = email === testEmail ? email : testEmail;
-
     const existing = emailOtps.get(email);
 
     if (existing && Date.now() - existing.createdAt < 60000) {
@@ -1162,17 +1155,12 @@ app.post("/api/auth/send-otp", async (req, res) => {
     const otp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
 
-    const result = await resend.emails.send({
-      from: "HICOM Vendor Finder <onboarding@resend.dev>",
-      to: [recipientEmail],
-      subject: `HICOM Vendor Finder - Login OTP (${email})`,
+    await mailTransporter.sendMail({
+      from: `"HICOM Vendor Finder" <${process.env.GMAIL_USER}>`,
+      to: email,
+      subject: "HICOM Vendor Finder - Login OTP",
       html: `<h2>Your login OTP is ${otp}</h2><p>This OTP expires in 5 minutes. Do not share it.</p>`
     });
-
-    if (result.error) {
-      console.error("Resend error:", result.error);
-      return res.status(502).json({ error: "OTP email could not be sent" });
-    }
 
     emailOtps.set(email, {
       hash: otpHash,
@@ -1487,6 +1475,7 @@ app.post("/api/vendors/:id/ratings", requireEmployee, (req, res) => {
     rating: newRating
   });
 });
+
 
 
 
