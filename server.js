@@ -3,17 +3,30 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const app = express();
-const mailTransporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+
+async function sendOtpEmail(toEmail, subject, htmlContent) {
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "api-key": process.env.BREVO_API_KEY,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      sender: { name: "HICOM Vendor Finder", email: process.env.SENDER_EMAIL || "sachinai1306@gmail.com" },
+      to: [{ email: toEmail }],
+      subject: subject,
+      htmlContent: htmlContent
+    })
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Brevo API error (${response.status}): ${errText}`);
+  }
+}
 const PORT = 3001;
 const DATA_FILE = path.join(__dirname, "vendors.json");
 
@@ -922,12 +935,11 @@ app.post("/api/admin/forgot-password", async (req, res) => {
     const otp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
 
-    await mailTransporter.sendMail({
-      from: `"HICOM Vendor Finder" <${process.env.GMAIL_USER}>`,
-      to: adminEmail,
-      subject: "HICOM Admin Password Reset OTP",
-      html: `<h2>Admin Password Reset OTP: ${otp}</h2><p>This OTP is valid for 5 minutes. If you did not request a reset, ignore this email.</p>`
-    });
+    await sendOtpEmail(
+      adminEmail,
+      "HICOM Admin Password Reset OTP",
+      `<h2>Admin Password Reset OTP: ${otp}</h2><p>This OTP is valid for 5 minutes. If you did not request a reset, ignore this email.</p>`
+    );
 
     adminResetOtps.set(adminEmail, {
       hash: otpHash,
@@ -1155,12 +1167,11 @@ app.post("/api/auth/send-otp", async (req, res) => {
     const otp = crypto.randomInt(100000, 1000000).toString();
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
 
-    await mailTransporter.sendMail({
-      from: `"HICOM Vendor Finder" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: "HICOM Vendor Finder - Login OTP",
-      html: `<h2>Your login OTP is ${otp}</h2><p>This OTP expires in 5 minutes. Do not share it.</p>`
-    });
+    await sendOtpEmail(
+      email,
+      "HICOM Vendor Finder - Login OTP",
+      `<h2>Your login OTP is ${otp}</h2><p>This OTP expires in 5 minutes. Do not share it.</p>`
+    );
 
     emailOtps.set(email, {
       hash: otpHash,
@@ -1475,6 +1486,7 @@ app.post("/api/vendors/:id/ratings", requireEmployee, (req, res) => {
     rating: newRating
   });
 });
+
 
 
 
