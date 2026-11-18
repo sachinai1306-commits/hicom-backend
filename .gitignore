@@ -1,0 +1,15 @@
+﻿node_modules/
+.env
+*.bak
+*.before-*
+add-*.js
+check-*.js
+clean-*.js
+diag-*.js
+fix-*.js
+inspect-*.js
+parallel-*.js
+patch-*.js
+polish-*.js
+speedup-*.js
+upgrade-*.js
