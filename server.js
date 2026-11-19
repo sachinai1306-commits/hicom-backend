@@ -186,15 +186,16 @@ const fetchGoogleMapsPlaces = async (queryLoc, lat, lon) => {
     const out = [];
     await Promise.all(qList.map(async (q) => {
       try {
-        const payload = { q, gl: "in", hl: "en", num: 20 };
-        if (useCoords && lat != null && lon != null) {
-          payload.ll = `@${lat},${lon},14z`;
+        // Serper /maps works best with text location in `q` WITHOUT `ll`, OR generic `q` WITH `ll`
+        const payload = { q, gl: "in", hl: "en" };
+        if (useCoords && lat != null && lon != null && !/\d{6}|\bin\b/i.test(q)) {
+          payload.ll = `@${lat},${lon},12z`;
         }
         const r = await fetch("https://google.serper.dev/maps", {
           method: "POST",
           headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(4000)
+          signal: AbortSignal.timeout(8000)
         });
         if (r.ok) {
           const data = await r.json();
@@ -208,7 +209,7 @@ const fetchGoogleMapsPlaces = async (queryLoc, lat, lon) => {
   const cityOnly = cleanLoc.replace(/\b\d{6}\b/g, "").trim();
   const initialQueries = [
     `internet service provider in ${cleanLoc}`,
-    `broadband fiber internet in ${cleanLoc}`
+    `broadband fiber internet in ${cleanLoc}`, `Jio Airtel BSNL fiber in ${cleanLoc}`
   ];
   if (cityOnly && cityOnly.toLowerCase() !== cleanLoc.toLowerCase()) {
     initialQueries.push(`internet service provider broadband in ${cityOnly}`);
@@ -1631,6 +1632,7 @@ app.post("/api/vendors/:id/ratings", requireEmployee, (req, res) => {
     rating: newRating
   });
 });
+
 
 
 
