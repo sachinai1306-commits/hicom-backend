@@ -811,9 +811,30 @@ app.get("/api/vendors/external-search", async (req, res) => {
     .slice(0, 60);
 
   if (finalVendors.length > 0) {
-    const cleanedVendors = finalVendors.filter((v) => isRelevantIsp(v.companyName || v.name || "", (v.services || []).join(" ")));
-  global.__hicomExtCacheV17.set(cacheKey, cleanedVendors);
-  return res.json({ success: true, location, resolvedCity, resolvedState, resolvedPincode, total: cleanedVendors.length, vendors: cleanedVendors });
+    const strictIspFilter = (v) => {
+      if (v.verified || v.source === "DOT/TRAI ISP Directory") return true;
+      const name = String(v.companyName || v.name || "").trim();
+      const addr = String(v.address || "").trim();
+      const fullText = `${name} ${addr}`.toLowerCase();
+
+      // 1. Block non-Indian / cross-border results (e.g., Nepal Telecom near Bihar border)
+      if (/\b(nepal|biratnagar|kathmandu|bhutan|bangladesh|pakistan|sri lanka)\b/i.test(fullText)) return false;
+
+      // 2. Block Cyber Cafes, Game Clubs, CSC / Digital Seva / Online Centres & Computer shops
+      const noiseBlock = /(game club|gaming|digital seva|online centre|online center|online service|jan seva|lok seva|csc|choice centre|e-?mitra|mitra|computer|कंप्यूटर|कंप्युटर|cyber cafe|photostat|xerox|studio|sim gallery|mobile repair|software|softwares|\btower\b|hospital|clinic|medical|travel|kirana|school|college|temple)/i;
+      if (noiseBlock.test(name)) return false;
+
+      // 3. Require genuine ISP / Telecom / Fiber / Broadband keyword in companyName
+      const ispRequired = /(internet|broadband|fiber|fibre|isp|wi-?fi|leased line|telecom|telecommunication|network|networks|cable net|infotech|communications|jio|airtel|bsnl|tata|railwire|sify|excitel|hathway|act|spectra|elxer|tikona|you broadband|alliance|connect)/i;
+      if (!ispRequired.test(name)) return false;
+
+      if (typeof v.distanceKm === "number" && v.distanceKm > 45) return false;
+      return isRelevantIsp(name, (v.services || []).join(" "));
+    };
+
+    const cleanedVendors = finalVendors.filter(strictIspFilter);
+    global.__hicomExtCacheV17.set(cacheKey, cleanedVendors);
+    return res.json({ success: true, location, resolvedCity, resolvedState, resolvedPincode, total: cleanedVendors.length, vendors: cleanedVendors });
   }
 
   return res.json({
@@ -1496,6 +1517,7 @@ app.post("/api/vendors/:id/ratings", requireEmployee, (req, res) => {
     rating: newRating
   });
 });
+
 
 
 
