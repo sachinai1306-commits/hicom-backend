@@ -263,7 +263,7 @@ app.get("/api/vendors/external-search", async (req, res) => {
 
   let latitude = null;
   let longitude = null;
-  let resolvedCity = "";
+  let resolvedCity = ""; let resolvedBlock = "";
   let resolvedState = "";
   let resolvedPincode = "";
   const allFound = [];
@@ -345,7 +345,7 @@ app.get("/api/vendors/external-search", async (req, res) => {
     ]);
 
     if (postOffice) {
-      resolvedCity = postOffice.District || postOffice.Block || resolvedCity;
+      resolvedCity = postOffice.District || postOffice.Block || resolvedCity; resolvedBlock = (postOffice.Block && postOffice.Block !== "NA") ? postOffice.Block : "";
       resolvedState = postOffice.State || resolvedState;
     }
 
@@ -489,7 +489,7 @@ app.get("/api/vendors/external-search", async (req, res) => {
 
     const [fsqPlaces, gMapsPlaces, overpassElements, ...nomResultsList] = await Promise.all([
         fetchFoursquarePlaces(latitude, longitude, cityTag),
-        fetchGoogleMapsPlaces([resolvedPincode, resolvedCity, resolvedState].filter(Boolean).join(" ") || location, latitude, longitude),
+        fetchGoogleMapsPlaces([resolvedPincode, resolvedBlock, resolvedCity, resolvedState].filter((v, i, a) => v && a.indexOf(v) === i).join(" ") || location, latitude, longitude),
       fetchOverpassFast(),
       ...nomKeywords.map((kw) => fetchNominatimKeyword(kw)), fetchPhoton("telecom " + cityTag), fetchPhoton("broadband " + cityTag), fetchPhoton("internet " + cityTag), fetchPhoton("fiber " + cityTag), fetchPhoton("airtel " + cityTag), fetchPhoton("jio " + cityTag), fetchPhoton("broadband " + (resolvedPincode || cityTag)), fetchPhoton("internet " + (resolvedPincode || cityTag)), fetchPhoton("cable " + cityTag)
     ]);
@@ -519,7 +519,7 @@ app.get("/api/vendors/external-search", async (req, res) => {
           latitude: gp.latitude ?? latitude,
           longitude: gp.longitude ?? longitude,
           distanceKm: gDist,
-          services: detectServices(gp.title, gp.type || "internet service provider broadband fiber"),
+          googleCategory: gp.type || "", services: detectServices(gp.title, gp.type || "internet service provider broadband fiber"),
           verified: false,
           source: "Google Maps Directory",
           availability: gp.rating ? (`Google Rating: ${gp.rating} \u2605 (${gp.ratingCount || 0})`) : "Active on Google Maps",
@@ -815,21 +815,27 @@ app.get("/api/vendors/external-search", async (req, res) => {
       if (v.verified || v.source === "DOT/TRAI ISP Directory") return true;
       const name = String(v.companyName || v.name || "").trim();
       const addr = String(v.address || "").trim();
+      const gCat = String(v.googleCategory || "").toLowerCase();
       const fullText = `${name} ${addr}`.toLowerCase();
 
       // 1. Block non-Indian / cross-border results (e.g., Nepal Telecom near Bihar border)
       if (/\b(nepal|biratnagar|kathmandu|bhutan|bangladesh|pakistan|sri lanka)\b/i.test(fullText)) return false;
 
-      // 2. Block Cyber Cafes, Game Clubs, CSC / Digital Seva / Online Centres & Computer shops
-      const noiseBlock = /(game club|gaming|digital seva|online centre|online center|online service|jan seva|lok seva|csc|choice centre|e-?mitra|mitra|computer|कंप्यूटर|कंप्युटर|cyber cafe|photostat|xerox|studio|sim gallery|mobile repair|software|softwares|\btower\b|hospital|clinic|medical|travel|kirana|school|college|temple)/i;
+      // 2. Block Cyber Cafes, Greeting Card/Computer shops, Game Clubs, CSC / Jan Seva
+      if (/(internet cafe|cyber cafe|greeting card|game|gaming|e-?commerce)/i.test(gCat)) return false;
+      const noiseBlock = /(game club|gaming|cyber cafe|digital seva|jan seva|lok seva|csc|choice centre|e-?mitra|computer|कंप्यूटर|कंप्युटर|photostat|xerox|studio|sim gallery|mobile repair|hospital|clinic|medical|travel|kirana|school|college|temple)/i;
       if (noiseBlock.test(name)) return false;
 
-      // 3. Require genuine ISP / Telecom / Fiber / Broadband keyword in companyName
-      const ispRequired = /(internet|broadband|fiber|fibre|isp|wi-?fi|leased line|telecom|telecommunication|network|networks|cable net|infotech|communications|jio|airtel|bsnl|tata|railwire|sify|excitel|hathway|act|spectra|elxer|tikona|you broadband|alliance|connect)/i;
-      if (!ispRequired.test(name)) return false;
-
       if (typeof v.distanceKm === "number" && v.distanceKm > 45) return false;
-      return isRelevantIsp(name, (v.services || []).join(" "));
+
+      // 3. If Google Maps explicitly classifies it as Internet Service Provider / Telecom / Telephone company, allow it!
+      if (/(internet service provider|telecommunications|telephone company|fiber|broadband|cable)/i.test(gCat)) {
+        return true;
+      }
+
+      // 4. Otherwise require genuine ISP / Telecom / Fiber / Broadband keyword in companyName
+      const ispRequired = /(internet|broadband|fiber|fibre|isp|wi-?fi|leased line|telecom|telecommunication|network|networks|cable net|infotech|communications|jio|airtel|bsnl|tata|railwire|sify|excitel|hathway|act|spectra|elxer|tikona|you broadband|alliance|connect)/i;
+      return ispRequired.test(name);
     };
 
     let cleanedVendors = finalVendors.filter(strictIspFilter);
@@ -932,7 +938,7 @@ app.get("/api/vendors/external-search", async (req, res) => {
       ];
     };
 
-    if (cleanedVendors.length < 3) {
+    if (cleanedVendors.length < 12) {
       const existingNames = cleanedVendors.map((x) => String(x.companyName || "").toLowerCase()).join(" ");
       const fallbacks = buildPanIndiaFallbacks().filter((fb) => {
         const brandKey = fb.companyName.split(" ")[0].toLowerCase();
@@ -1625,6 +1631,7 @@ app.post("/api/vendors/:id/ratings", requireEmployee, (req, res) => {
     rating: newRating
   });
 });
+
 
 
 
